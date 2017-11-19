@@ -4,11 +4,12 @@ from sklearn.datasets import load_diabetes
 from sklearn.model_selection import train_test_split
 from scipy.special import expit
 from numpy import logaddexp
+import time
 
 
 class LogReg(BaseEstimator):
     def __init__(self, lambda_1=0.0, lambda_2=1.0, gd_type='stochastic',
-                 tolerance=1e-6, max_iter=1000, w0=None, alpha=1e-2):
+                 tolerance=1e-6, max_iter=1000, w0=None, alpha=1e-3):
         """
         lambda_1: L1 regularization param
         lambda_2: L2 regularization param
@@ -28,6 +29,8 @@ class LogReg(BaseEstimator):
         self.w = None
         self.loss_history = None
 
+        self.times = None
+
     def fit(self, X, y):
         """
         X: np.array of shape (l, d)
@@ -35,19 +38,27 @@ class LogReg(BaseEstimator):
         ---
         output: self
         """
+        X = X.astype('float64')
+        y = y.astype('float64')
         self.loss_history = []
+        self.times = []
+        start_time = time.time()
+
         l, d = X.shape
-        X = np.c_[X, np.ones(l)]
-        d += 1
 
         if self.w0:
-            self.w = np.array(self.w0)
+            self.w = np.array(self.w0, dtype='float64')
         else:
-            self.w = np.zeros(d)
+            self.w = np.zeros(d, dtype='float64')
 
         for i in range(self.max_iter):
-            qr = self.calc_gradient(X, y)
+            if self.gd_type == 'stochastic':
+                i = np.random.randint(0, l)
+                qr = self.calc_gradient(X[i:i + 1], y[i:i + 1])
+            else:
+                qr = self.calc_gradient(X, y)
             self.loss_history.append(self.calc_loss(X, y))
+            self.times.append(time.time() - start_time)
 
             if np.linalg.norm(self.alpha * qr) < self.tolerance:
                 return self
@@ -85,14 +96,9 @@ class LogReg(BaseEstimator):
         """
         l, d = X.shape
 
-        if self.gd_type == 'stochastic':
-            i = np.random.randint(0, l)
-            qg = (-y[i] * X[i] / (1 + np.exp(y[i] *
-                                             np.dot(self.w, X[i]))) + self.lambda_2 * self.w / l)
-            return qg
-
         y = np.array([y])
-        qg = -y.T * X * expit(y * np.dot(X, self.w)).T + self.lambda_2 * self.w
+        qg = -y.T * X * expit(-y * np.dot(X, self.w)).T + \
+            self.lambda_2 * self.w
 
         return np.mean(qg, axis=0)
 
@@ -105,7 +111,7 @@ class LogReg(BaseEstimator):
         """
         l, d = X.shape
 
-        Q = logaddexp(np.ones(l) * np.exp(1), -y * np.dot(X, self.w)) + \
+        Q = logaddexp(np.ones(l) * np.log(1), -y * np.dot(X, self.w)) + \
             self.lambda_2 * np.dot(self.w, self.w) / 2
 
         return np.mean(Q, axis=0)
