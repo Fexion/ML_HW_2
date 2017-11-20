@@ -46,7 +46,7 @@ class LogReg(BaseEstimator):
 
         l, d = X.shape
 
-        if self.w0:
+        if self.w0 is not None:
             self.w = np.array(self.w0, dtype='float64')
         else:
             self.w = np.zeros(d, dtype='float64')
